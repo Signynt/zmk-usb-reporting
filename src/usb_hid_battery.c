@@ -26,50 +26,32 @@ LOG_MODULE_REGISTER(usb_hid_battery, CONFIG_ZMK_LOG_LEVEL);
 #define BATTERY_REPORT_ID_RIGHT  0x06
 
 static const uint8_t battery_hid_report_desc[] = {
-    /* Left Half Battery Report - Power Page */
-    0x05, 0x84,
-    0x09, 0x04,
-    0xA1, 0x01,
-    0x85, BATTERY_REPORT_ID_LEFT,
-    0x09, 0x10,
-    0xA1, 0x02,
-    0x09, 0x66,
-    0x15, 0x00,
-    0x26, 0x64, 0x00,
-    0x67, 0x01, 0x00, 0x10, 0x00,
-    0x75, 0x08,
-    0x95, 0x01,
-    0xB1, 0x02,
-    0xC0,
-    0xC0,
+    // Power Device application
+    0x05, 0x84,       // Usage Page (Power Device)
+    0x09, 0x05,       // Usage (Power Device)
+    0xA1, 0x01,       // Collection (Application)
 
-    /* Right Half Battery Report - Power Page */
-    0x05, 0x84,
-    0x09, 0x04,
-    0xA1, 0x01,
-    0x85, BATTERY_REPORT_ID_RIGHT,
-    0x09, 0x10,
-    0xA1, 0x02,
-    0x09, 0x66,
-    0x15, 0x00,
-    0x26, 0x64, 0x00,
-    0x67, 0x01, 0x00, 0x10, 0x00,
-    0x75, 0x08,
-    0x95, 0x01,
-    0xB1, 0x02,
-    0xC0,
-    0xC0,
+    0x05, 0x85,       // Usage Page (Battery System)
+    0x85, BATTERY_REPORT_ID_RIGHT, // Report ID 0x06
+
+    0x09, 0x65,       // Absolute State of Charge
+    0x15, 0x00,       // Logical Minimum 0
+    0x25, 0x64,       // Logical Maximum 100
+    0x35, 0x00,       // Physical Minimum 0
+    0x45, 0x64,       // Physical Maximum 100
+
+    0x75, 0x08,       // Report Size: 8 bits
+    0x95, 0x01,       // Report Count: 1
+    0x81, 0x02,       // Input (Data, Variable, Absolute)
+
+    0xC0,             // End Collection
 };
+
 
 struct battery_report {
     uint8_t report_id;
     uint8_t level;
 } __packed;
-
-static struct battery_report left_battery_report = {
-    .report_id = BATTERY_REPORT_ID_LEFT,
-    .level = 0
-};
 
 static struct battery_report right_battery_report = {
     .report_id = BATTERY_REPORT_ID_RIGHT,
@@ -93,37 +75,23 @@ static int hid_get_report_cb(const struct device *dev,
 
     LOG_DBG("Get report: type=%d, id=%d", report_type, report_id);
 
-    if (report_type == 0x01 || report_type == 0x03) {
-        switch (report_id) {
-        case BATTERY_REPORT_ID_LEFT:
-            // Central (USB-connected left half)
-            left_battery_report.level = zmk_battery_state_of_charge();
-
-            *data = (uint8_t *)&left_battery_report;
-            *len = sizeof(left_battery_report);
-
-            LOG_DBG("Returning left battery: %d%%",
-                    left_battery_report.level);
-            return 0;
-
-        case BATTERY_REPORT_ID_RIGHT:
-            #if IS_ENABLED(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
-            {
-                uint8_t level = 0;
-                int rc = zmk_split_central_get_peripheral_battery_level(0, &level);
-                if (rc == 0) {
-                    right_battery_report.level = level;
-                }
-            }
-            #endif
-            *data = (uint8_t *)&right_battery_report;
-            *len = sizeof(right_battery_report);
-            LOG_DBG("Returning right battery: %d%%", right_battery_report.level);
-            return 0;
-        }
+    if (report_type != 0x01 ||
+        report_id != BATTERY_REPORT_ID_RIGHT) {
+        return -ENOTSUP;
     }
 
-    return -ENOTSUP;
+    #if IS_ENABLED(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
+        uint8_t level = 0;
+        int rc = zmk_split_central_get_peripheral_battery_level(0, &level);
+
+        if (rc == 0) {
+            right_battery_report.level = level;
+        }
+    #endif
+
+    *data = (uint8_t *)&right_battery_report;
+    *len = sizeof(right_battery_report);
+    return 0;
 }
 
 static const struct hid_ops hid_ops = {
