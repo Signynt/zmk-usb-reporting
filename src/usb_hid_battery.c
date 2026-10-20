@@ -27,8 +27,8 @@ LOG_MODULE_REGISTER(usb_hid_battery, CONFIG_ZMK_LOG_LEVEL);
 
 static const uint8_t battery_hid_report_desc[] = {
     // Power Device application
-    0x05, 0x84,       // Usage Page (Power Device)
-    0x09, 0x05,       // Usage (Power Device)
+    0x05, 0x01,       // Usage Page (Generic Desktop)
+    0x09, 0x06,       // Usage (Keyboard)
     0xA1, 0x01,       // Collection (Application)
 
     0x05, 0x85,       // Usage Page (Battery System)
